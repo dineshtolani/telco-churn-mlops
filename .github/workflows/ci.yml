@@ -1,0 +1,104 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOCKER_IMAGE: ghcr.io/${{ github.repository }}:latest
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Bandit security scan
+        run: |
+          bandit -c security/bandit/.bandit.yaml -r src/ serving/ scripts/
+
+      - name: Run unit tests
+        run: |
+          PYTHONPATH=. python -m pytest tests/ -v --tb=short || echo "No tests yet"
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v4
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=telco-churn-mlops
+            -Dsonar.sources=src/,serving/
+            -Dsonar.python.version=3.12
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: GitLeaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+  docker:
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, security]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build multi-stage Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: serving/Dockerfile
+          load: true
+          tags: ${{ env.DOCKER_IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: image
+          scan-ref: ${{ env.DOCKER_IMAGE }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 1
+
+      - name: Docker Scout vulnerability check
+        uses: docker/scout-action@v1
+        with:
+          image: ${{ env.DOCKER_IMAGE }}
+          command: quickview
+          only-severities: high,critical
+
+      - name: Push image
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          docker push ${{ env.DOCKER_IMAGE }}

@@ -1,0 +1,10 @@
+skips: ['B101', 'B311', 'B404']
+exclude_dirs:
+  - .venv
+  - venv
+  - __pycache__
+  - tests
+  - .git
+  - volumes
+  - data
+  - training

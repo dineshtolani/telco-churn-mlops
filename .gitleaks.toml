@@ -1,0 +1,9 @@
+[allowlist]
+description = "Global allowlist for TelcoChurn"
+paths = [
+    ".env.example",
+    "tests/",
+    ".venv/",
+    "venv/",
+    "volumes/",
+]

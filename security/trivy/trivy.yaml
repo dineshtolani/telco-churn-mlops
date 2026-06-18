@@ -1,0 +1,9 @@
+severity: HIGH,CRITICAL
+vulnerability:
+  ignore-unfixed: true
+scan:
+  skip-dirs:
+    - .venv/
+    - venv/
+    - volumes/
+    - __pycache__/
