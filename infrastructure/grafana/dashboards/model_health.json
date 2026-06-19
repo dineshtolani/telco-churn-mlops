@@ -1,0 +1,30 @@
+{
+  "title": "Model Health",
+  "uid": "model-health",
+  "schemaVersion": 36,
+  "version": 1,
+  "timezone": "browser",
+  "panels": [
+    {
+      "title": "Prediction Rate",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "targets": [{"expr": "rate(prediction_count_total[5m])", "legendFormat": "predictions/sec"}]
+    },
+    {
+      "title": "Prediction Latency (p95)",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "targets": [{"expr": "histogram_quantile(0.95, rate(prediction_latency_seconds_bucket[5m]))", "legendFormat": "p95"}]
+    },
+    {
+      "title": "Churn vs Stay",
+      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "targets": [
+        {"expr": "rate(churn_predictions_total{prediction=\"Yes\"}[5m])", "legendFormat": "Churn"},
+        {"expr": "rate(churn_predictions_total{prediction=\"No\"}[5m])", "legendFormat": "Stay"}
+      ]
+    }
+  ]
+}

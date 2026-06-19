@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-api
+  namespace: telcochurn
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: model-api
+  template:
+    metadata:
+      labels:
+        app: model-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8888"
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/dineshtolani/telco-churn-mlops:latest
+          ports:
+            - containerPort: 8888
+          env:
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: "http://minio:9000"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-api
+  namespace: telcochurn
+spec:
+  selector:
+    app: model-api
+  ports:
+    - port: 8888
+      targetPort: 8888
+  type: ClusterIP
