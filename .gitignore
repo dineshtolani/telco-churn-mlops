@@ -3,3 +3,5 @@ volumes/
 mlflow.db
 mlflow-artifacts/
 .env
+interview-notes.py
+interview-notes.pdf
