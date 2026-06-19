@@ -21,6 +21,7 @@ spec:
           image: ghcr.io/dineshtolani/telco-churn-mlops:latest
           ports:
             - containerPort: 8888
+          imagePullPolicy: IfNotPresent
           env:
             - name: MLFLOW_TRACKING_URI
               value: "http://mlflow:5000"
