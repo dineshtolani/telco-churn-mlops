@@ -2,6 +2,25 @@
 
 Production-grade MLOps platform for predicting telecom customer churn, featuring automated retraining, drift detection, and CI/CD.
 
+## What It Predicts
+
+The model predicts **customer churn** — whether a telecom subscriber will cancel their service in the next billing cycle. Using 21 customer attributes (demographics, account info, services subscribed), it outputs a churn probability and a binary Yes/No decision.
+
+### Business Impact for Telcos
+
+| Problem | Solution via this platform |
+|---------|--------------------------|
+| **Churn costs millions** — acquiring a new customer is 5-7× more expensive than retaining one | Model identifies high-risk customers *before* they leave, enabling targeted retention offers |
+| **Retention budgets are limited** — can't discount everyone | Predictions let marketing focus 80% of budget on the ~20% of customers most likely to churn |
+| **Churn reasons drift over time** — pricing, competitor offers, service quality change | Monthly drift detection + auto-retraining pipeline keeps predictions accurate |
+| **Siloed data & manual workflows** | End-to-end MLOps: automated ETL → training → serving → monitoring |
+
+### Example Retention Use Cases
+
+- **Contract expiry**: Flag customers on month-to-month plans 30 days before their tenure milestone — offer loyalty discounts
+- **Service downgrade detection**: If a customer drops premium features (Online Security, Tech Support), the model's churn probability rises — trigger a proactive check-in call
+- **High-value churners**: Customers with above-average tenure and high monthly charges who are predicted to churn → escalate to retention team (not just an automated SMS)
+
 ## Architecture
 
 ```

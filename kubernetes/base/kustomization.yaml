@@ -10,12 +10,17 @@ resources:
   - mlflow.yaml
   - postgres.yaml
   - prometheus.yaml
+  - prometheus-rbac.yaml
   - prometheus-config.yaml
   - grafana.yaml
   - grafana-datasources.yaml
   - grafana-dashboards.yaml
   - airflow.yaml
+  - airflow-dags.yaml
   - otel-collector.yaml
   - otel-collector-config.yaml
   - tempo.yaml
   - tempo-config.yaml
+  - kyverno/require-prometheus-annotation.yaml
+  - kyverno/require-resource-limits.yaml
+  - kyverno/disallow-latest-tag.yaml

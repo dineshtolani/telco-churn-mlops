@@ -16,6 +16,7 @@ spec:
       containers:
         - name: mlflow
           image: ghcr.io/dineshtolani/telco-churn-mlops/mlflow:latest
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5000
           env:

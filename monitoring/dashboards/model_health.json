@@ -1,0 +1,8 @@
+{
+  "title": "Model Health",
+  "panels": [
+    {"title": "Prediction Count", "type": "graph", "targets": [{"expr": "rate(prediction_count[5m])"}]},
+    {"title": "Latency (p95)", "type": "graph", "targets": [{"expr": "histogram_quantile(0.95, rate(prediction_latency_seconds_bucket[5m]))"}]},
+    {"title": "Churn vs Stay", "type": "graph", "targets": [{"expr": "rate(churn_predictions_total[5m])"}]}
+  ]
+}

@@ -14,7 +14,7 @@ data:
         disableDeletion: false
         editable: true
         options:
-          path: /var/lib/grafana/dashboards
+          path: /etc/grafana/provisioning/dashboards
   model_health.json: |
     {
       "title": "Model Health",

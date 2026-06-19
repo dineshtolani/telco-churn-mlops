@@ -1,0 +1,207 @@
+apiVersion: v1
+data:
+  drift_detection.py: |
+    from airflow import DAG
+    from airflow.operators.python import PythonOperator
+    from datetime import datetime, timedelta
+
+    default_args = {
+        "owner": "mlops",
+        "depends_on_past": False,
+        "start_date": datetime(2026, 1, 1),
+        "retries": 1,
+        "retry_delay": timedelta(minutes=5),
+    }
+
+    NUM_FEATURES = ["tenure", "MonthlyCharges", "TotalCharges"]
+    CAT_FEATURES = ["Contract", "InternetService", "PaymentMethod"]
+
+    def detect_drift(**context):
+        import pandas as pd
+        import numpy as np
+        month = context["params"].get("month", "apr")
+        ref = pd.read_csv("/data/raw/customers_jan.csv")
+        current = pd.read_csv(f"/data/raw/customers_{month}.csv")
+
+        # Clean numeric columns
+        for col in NUM_FEATURES:
+            ref[col] = pd.to_numeric(ref[col], errors="coerce").fillna(0)
+            current[col] = pd.to_numeric(current[col], errors="coerce").fillna(0)
+
+        drift_score = 0.0
+        for col in NUM_FEATURES:
+            ref_mean = ref[col].mean()
+            cur_mean = current[col].mean()
+            if ref_mean == 0:
+                continue
+            diff_pct = abs(cur_mean - ref_mean) / ref_mean * 100
+            if diff_pct > 5:
+                drift_score += 1
+            print(f"  {col}: ref={ref_mean:.2f} cur={cur_mean:.2f} drift={diff_pct:.1f}%")
+
+        for col in CAT_FEATURES:
+            ref_dist = ref[col].value_counts(normalize=True).to_dict()
+            cur_dist = current[col].value_counts(normalize=True).to_dict()
+            all_keys = set(list(ref_dist) + list(cur_dist))
+            drift = sum(abs(ref_dist.get(k, 0) - cur_dist.get(k, 0)) for k in all_keys)
+            if drift > 0.1:
+                drift_score += 1
+            print(f"  {col}: categorical drift={drift:.3f}")
+
+        if drift_score > 3:
+            print(f"\nDRIFT DETECTED! Score: {drift_score}/10")
+        else:
+            print(f"\nNo significant drift. Score: {drift_score}/10")
+        return drift_score
+
+    with DAG(
+        "drift_detection",
+        default_args=default_args,
+        description="Monthly data drift check",
+        schedule_interval="@monthly",
+        catchup=False,
+        params={"month": "jun"},
+    ) as dag:
+        drift = PythonOperator(task_id="detect_drift", python_callable=detect_drift)
+        drift
+  etl_pipeline.py: |
+    from airflow import DAG
+    from airflow.operators.python import PythonOperator
+    from datetime import datetime, timedelta
+    import os
+
+    default_args = {
+        "owner": "mlops",
+        "depends_on_past": False,
+        "start_date": datetime(2026, 1, 1),
+        "retries": 1,
+        "retry_delay": timedelta(minutes=5),
+    }
+
+    def ingest_data(**context):
+        import pandas as pd
+        month = context["params"].get("month", "apr")
+        path = f"/data/raw/customers_{month}.csv"
+        df = pd.read_csv(path)
+        print(f"Ingested {len(df)} rows from {path}")
+        return len(df)
+
+    def validate_data(**context):
+        import pandas as pd
+        month = context["params"].get("month", "apr")
+        path = f"/data/raw/customers_{month}.csv"
+        df = pd.read_csv(path)
+        required_cols = ["customerID", "tenure", "MonthlyCharges", "Churn"]
+        missing = [c for c in required_cols if c not in df.columns]
+        if missing:
+            raise ValueError(f"Missing columns: {missing}")
+        nulls = df["TotalCharges"].isnull().sum()
+        if nulls > 0:
+            print(f"Warning: {nulls} null TotalCharges values")
+        churn_rate = (df["Churn"] == "Yes").mean()
+        print(f"Churn rate: {churn_rate:.2%}")
+        return float(churn_rate)
+
+    def preprocess_data(**context):
+        import pandas as pd
+        month = context["params"].get("month", "apr")
+        path = f"/data/raw/customers_{month}.csv"
+        df = pd.read_csv(path)
+        df["TotalCharges"] = pd.to_numeric(df["TotalCharges"], errors="coerce")
+        df.dropna(subset=["TotalCharges"], inplace=True)
+        df["tenure_years"] = (df["tenure"] / 12).round(1)
+        df["avg_charge_per_month"] = (df["TotalCharges"] / df["tenure"].replace(0, 1)).round(2)
+        output_path = f"/data/processed/customers_{month}_processed.parquet"
+        os.makedirs("/data/processed", exist_ok=True)
+        df.to_parquet(output_path, index=False)
+        print(f"Saved to {output_path}")
+
+    with DAG(
+        "etl_pipeline",
+        default_args=default_args,
+        description="Monthly ETL: ingest, validate, preprocess",
+        schedule_interval="@monthly",
+        catchup=False,
+        params={"month": "apr"},
+    ) as dag:
+        ingest = PythonOperator(task_id="ingest_data", python_callable=ingest_data)
+        validate = PythonOperator(task_id="validate_data", python_callable=validate_data)
+        preprocess = PythonOperator(task_id="preprocess_data", python_callable=preprocess_data)
+        ingest >> validate >> preprocess
+  training_pipeline.py: |
+    from airflow import DAG
+    from airflow.operators.python import PythonOperator
+    from datetime import datetime, timedelta
+    import os
+
+    default_args = {
+        "owner": "mlops",
+        "depends_on_past": False,
+        "start_date": datetime(2026, 1, 1),
+        "retries": 1,
+        "retry_delay": timedelta(minutes=5),
+    }
+
+    CAT_FEATURES = [
+        "gender", "SeniorCitizen", "Partner", "Dependents",
+        "PhoneService", "MultipleLines", "InternetService",
+        "OnlineSecurity", "OnlineBackup", "DeviceProtection",
+        "TechSupport", "StreamingTV", "StreamingMovies",
+        "Contract", "PaperlessBilling", "PaymentMethod",
+    ]
+    NUM_FEATURES = ["tenure", "MonthlyCharges", "TotalCharges"]
+
+    def train_models(**context):
+        import pandas as pd
+        import numpy as np
+        import joblib
+        from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import OneHotEncoder, StandardScaler
+        from sklearn.compose import ColumnTransformer
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.pipeline import Pipeline
+        from sklearn.metrics import f1_score
+
+        month = context["params"].get("month", "apr")
+        path = f"/data/processed/customers_{month}_processed.parquet"
+        df = pd.read_parquet(path)
+
+        y = (df["Churn"].map({"Yes": 1, "No": 0}).values)
+        X = df[CAT_FEATURES + NUM_FEATURES]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        preprocessor = ColumnTransformer([
+            ("cat", OneHotEncoder(drop="first", handle_unknown="ignore"), CAT_FEATURES),
+            ("num", StandardScaler(), NUM_FEATURES),
+        ])
+
+        model = Pipeline([
+            ("preprocessor", preprocessor),
+            ("classifier", RandomForestClassifier(
+                max_depth=5, n_estimators=300, class_weight="balanced", random_state=42, n_jobs=-1
+            )),
+        ])
+        model.fit(X_train, y_train)
+        y_pred = model.predict(X_test)
+        f1 = f1_score(y_test, y_pred)
+
+        os.makedirs("/training/models", exist_ok=True)
+        model_path = f"/training/models/churn_model_{month}.joblib"
+        joblib.dump(model, model_path)
+        print(f"Model saved to {model_path} | F1: {f1:.4f}")
+        return float(f1)
+
+    with DAG(
+        "training_pipeline",
+        default_args=default_args,
+        description="Train and register best model monthly",
+        schedule_interval="@monthly",
+        catchup=False,
+        params={"month": "apr"},
+    ) as dag:
+        train = PythonOperator(task_id="train_models", python_callable=train_models)
+        train
+kind: ConfigMap
+metadata:
+  name: airflow-dags
+  namespace: telcochurn

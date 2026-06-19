@@ -1,0 +1,21 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-prometheus-annotation
+spec:
+  validationFailureAction: Audit
+  rules:
+    - name: check-prometheus-scrape
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - telcochurn
+      validate:
+        message: "All pods in telcochurn namespace must have annotation prometheus.io/scrape: true"
+        pattern:
+          metadata:
+            annotations:
+              prometheus.io/scrape: "true"

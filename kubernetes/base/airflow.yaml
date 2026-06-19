@@ -1,3 +1,32 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: airflow-init
+  namespace: telcochurn
+spec:
+  template:
+    spec:
+      containers:
+        - name: init
+          image: apache/airflow:2.9.1-python3.12
+          env:
+            - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+              value: "postgresql+psycopg2://mlflow:mlflow@postgres:5432/airflow"
+          command:
+            - /bin/bash
+            - -c
+            - |
+              airflow db init
+              airflow users create \
+                --username admin \
+                --password admin \
+                --firstname Admin \
+                --lastname User \
+                --role Admin \
+                --email admin@example.com 2>/dev/null || true
+      restartPolicy: Never
+  backoffLimit: 5
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +44,13 @@ spec:
         app: airflow
         component: webserver
     spec:
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -p 5432; do sleep 2; done
       containers:
         - name: webserver
           image: apache/airflow:2.9.1-python3.12
@@ -25,7 +61,7 @@ spec:
             - name: AIRFLOW__CORE__EXECUTOR
               value: "LocalExecutor"
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
-              value: "postgresql+psycopg2://airflow:airflow@postgres:5432/airflow"
+              value: "postgresql+psycopg2://mlflow:mlflow@postgres:5432/airflow"
           volumeMounts:
             - name: dags
               mountPath: /opt/airflow/dags
@@ -51,6 +87,13 @@ spec:
         app: airflow
         component: scheduler
     spec:
+      initContainers:
+        - name: wait-for-db
+          image: postgres:16
+          command:
+            - sh
+            - -c
+            - until pg_isready -h postgres -p 5432; do sleep 2; done
       containers:
         - name: scheduler
           image: apache/airflow:2.9.1-python3.12
@@ -59,7 +102,7 @@ spec:
             - name: AIRFLOW__CORE__EXECUTOR
               value: "LocalExecutor"
             - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
-              value: "postgresql+psycopg2://airflow:airflow@postgres:5432/airflow"
+              value: "postgresql+psycopg2://mlflow:mlflow@postgres:5432/airflow"
           volumeMounts:
             - name: dags
               mountPath: /opt/airflow/dags
