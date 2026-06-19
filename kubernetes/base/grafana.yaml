@@ -48,4 +48,5 @@ spec:
     app: grafana
   ports:
     - port: 3000
-  type: ClusterIP
+      nodePort: 30000
+  type: NodePort
