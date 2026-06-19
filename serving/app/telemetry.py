@@ -5,7 +5,6 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.prometheus import PrometheusInstrumentor
 from opentelemetry.sdk.resources import Resource
 
 SERVICE_NAME = "telcochurn-model-api"

@@ -1,9 +1,19 @@
+import os
+import joblib
 import pandas as pd
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from serving.app.metrics import PREDICTION_COUNT, PREDICTION_LATENCY, CHURN_PREDICTIONS
 
 router = APIRouter()
+
+encoders: dict = {}
+
+@router.on_event("startup")
+def load_encoders():
+    global encoders
+    path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "model", "encoders.joblib")
+    encoders = joblib.load(path)
 
 class CustomerData(BaseModel):
     gender: str
@@ -36,6 +46,10 @@ def predict(data: CustomerData, request: Request):
     start = time.time()
 
     df = pd.DataFrame([data.model_dump()])
+    for col, le in encoders.items():
+        if col in df.columns:
+            df[col] = le.transform(df[col].astype(str))
+
     model = request.app.state.model
     prob = model.predict_proba(df)[0, 1]
     pred = "Yes" if prob >= 0.5 else "No"
